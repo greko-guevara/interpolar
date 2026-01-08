@@ -1,86 +1,104 @@
+# ==========================================
+# INTER-POLAR | Streamlit Edition
+# Migración desde Tkinter
+# Prof. Gregory Guevara
+# ==========================================
+
 import streamlit as st
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
 from scipy.interpolate import griddata, Rbf
+from scipy.stats import kurtosis, skew
 from pykrige.ok import OrdinaryKriging
 from pykrige.uk import UniversalKriging
+import skgstat as skg
 
-# =========================
-# CONFIG STREAMLIT
-# =========================
+# ------------------------------------------
+# CONFIGURACIÓN GENERAL
+# ------------------------------------------
 st.set_page_config(
-    page_title="Interpolación Espacial",
+    page_title="Inter-Polar | Interpolación",
     layout="wide"
 )
 
-st.title("Interpolación Espacial – Versión Streamlit")
+st.title("🌍 Inter-Polar – Métodos de Interpolación")
+st.caption("Versión Streamlit | Geoestadística aplicada")
 
-# =========================
-# 1. CARGA DE DATOS
-# =========================
-st.subheader("1. Cargar datos")
+# ------------------------------------------
+# SIDEBAR – CARGA DE DATOS
+# ------------------------------------------
+st.sidebar.header("1️⃣ Archivo de datos")
 
-uploaded_file = st.file_uploader(
-    "Cargue archivo CSV con columnas: X, Y, Z",
-    type=["csv"]
+uploaded_file = st.sidebar.file_uploader(
+    "Cargar archivo CSV o Excel",
+    type=["csv", "xls", "xlsx"]
 )
 
-if uploaded_file is None:
-    st.info("Cargue un archivo para continuar")
-    st.stop()
+df = None
 
-df = pd.read_csv(uploaded_file)
+if uploaded_file:
+    if uploaded_file.name.endswith(".csv"):
+        df = pd.read_csv(uploaded_file)
+    else:
+        df = pd.read_excel(uploaded_file)
 
-if not all(col in df.columns for col in ["X", "Y", "Z"]):
-    st.error("El archivo debe contener columnas: X, Y, Z")
-    st.stop()
+    required_cols = {"x", "y", "z", "punto"}
+    if not required_cols.issubset(df.columns):
+        st.error("El archivo debe contener las columnas: x, y, z, punto")
+        st.stop()
 
-x = df["X"].values
-y = df["Y"].values
-z = df["Z"].values
+# ------------------------------------------
+# ESTADÍSTICAS DESCRIPTIVAS
+# ------------------------------------------
+if df is not None:
+    st.subheader("📊 Estadísticas descriptivas")
 
-st.success(f"{len(df)} puntos cargados correctamente")
+    col1, col2, col3 = st.columns(3)
 
-# =========================
-# 2. MALLA DE INTERPOLACIÓN
-# =========================
-st.subheader("2. Configuración de malla")
+    col1.metric("Puntos", len(df))
+    col1.metric("Mínimo Z", f"{df['z'].min():.3f}")
+    col1.metric("Máximo Z", f"{df['z'].max():.3f}")
 
-resolucion = st.slider("Resolución de la malla", 30, 300, 100)
+    col2.metric("Media Z", f"{df['z'].mean():.3f}")
+    col2.metric("Desv. Std", f"{df['z'].std():.3f}")
+    col2.metric("Varianza", f"{df['z'].var():.3f}")
 
-xi = np.linspace(x.min(), x.max(), resolucion)
-yi = np.linspace(y.min(), y.max(), resolucion)
-xi, yi = np.meshgrid(xi, yi)
+    col3.metric("Curtosis", f"{kurtosis(df['z']):.3f}")
+    col3.metric("Asimetría", f"{skew(df['z']):.3f}")
 
-# =========================
-# 3. MÉTODO DE INTERPOLACIÓN
-# =========================
-st.subheader("3. Ejecutar Interpolación")
+    st.dataframe(df, use_container_width=True)
 
-metodo = st.radio(
-    "Seleccione el método",
-    (
-        "Geométrica Lineal",
-        "Vecinos Próximos",
-        "IDW",
-        "RBF",
-        "Kriging"
-    )
+# ------------------------------------------
+# SIDEBAR – PARÁMETROS
+# ------------------------------------------
+st.sidebar.header("2️⃣ Parámetros generales")
+
+grid_size = st.sidebar.slider("Tamaño de malla", 30, 200, 100)
+colormap = st.sidebar.selectbox(
+    "Mapa de color",
+    ["viridis", "plasma", "inferno", "magma", "cividis"]
 )
 
-# ---- Parámetros dinámicos ----
+st.sidebar.header("3️⃣ Método de interpolación")
+
+metodo = st.sidebar.selectbox(
+    "Seleccione método",
+    ["Nearest", "Linear", "IDW", "RBF", "Kriging"]
+)
+
+# --- Hiperparámetros ---
 idw_power = None
 rbf_func = None
 kriging_type = None
 kriging_model = None
 
 if metodo == "IDW":
-    idw_power = st.selectbox("Power (IDW)", [1, 2, 3, 4], index=1)
+    idw_power = st.sidebar.selectbox("Power (IDW)", [1, 2, 3, 4], index=1)
 
 if metodo == "RBF":
-    rbf_func = st.selectbox(
+    rbf_func = st.sidebar.selectbox(
         "Función RBF",
         [
             "linear",
@@ -89,93 +107,136 @@ if metodo == "RBF":
             "quintic",
             "multiquadric",
             "inverse_multiquadric",
-            "gaussian"
+            "gaussian",
         ]
     )
 
 if metodo == "Kriging":
-    kriging_type = st.selectbox("Tipo de Kriging", ["Ordinary", "Universal"])
-    kriging_model = st.selectbox(
+    kriging_type = st.sidebar.selectbox(
+        "Tipo de Kriging", ["Ordinary", "Universal"]
+    )
+    kriging_model = st.sidebar.selectbox(
         "Modelo de variograma",
         ["linear", "power", "gaussian", "spherical", "exponential"]
     )
 
-# =========================
-# FUNCIÓN CENTRAL (MISMA IDEA QUE TKINTER)
-# =========================
-def ejecutar_interpolacion(
-    metodo,
-    idw_power=None,
-    rbf_func=None,
-    kriging_type=None,
-    kriging_model=None
-):
-    if metodo == "Geométrica Lineal":
-        zi = griddata((x, y), z, (xi, yi), method="linear")
+# ------------------------------------------
+# INTERPOLACIÓN
+# ------------------------------------------
+if df is not None and st.button("▶ Ejecutar interpolación"):
 
-    elif metodo == "Vecinos Próximos":
-        zi = griddata((x, y), z, (xi, yi), method="nearest")
+    x = df["x"].values
+    y = df["y"].values
+    z = df["z"].values
 
-    elif metodo == "IDW":
-        zi = np.zeros_like(xi)
-        for i in range(xi.shape[0]):
-            for j in range(xi.shape[1]):
-                dist = np.sqrt((x - xi[i, j])**2 + (y - yi[i, j])**2)
-                dist[dist == 0] = 1e-10
-                w = 1 / dist**idw_power
-                zi[i, j] = np.sum(w * z) / np.sum(w)
+    xi = np.linspace(x.min(), x.max(), grid_size)
+    yi = np.linspace(y.min(), y.max(), grid_size)
+    XI, YI = np.meshgrid(xi, yi)
 
-    elif metodo == "RBF":
-        rbf = Rbf(x, y, z, function=rbf_func)
-        zi = rbf(xi, yi)
+    zi = None
+    titulo = ""
 
-    elif metodo == "Kriging":
-        if kriging_type == "Ordinary":
-            OK = OrdinaryKriging(
-                x, y, z,
-                variogram_model=kriging_model,
-                verbose=False,
-                enable_plotting=False
+    try:
+        # ---- GRIDDATA ----
+        if metodo == "Nearest":
+            zi = griddata((x, y), z, (XI, YI), method="nearest")
+            titulo = "Vecinos Próximos"
+
+        elif metodo == "Linear":
+            zi = griddata((x, y), z, (XI, YI), method="linear")
+            titulo = "Interpolación Lineal"
+
+        # ---- IDW (RBF) ----
+        elif metodo == "IDW":
+            rbf = Rbf(x, y, z, function="inverse_multiquadric")
+            zi = rbf(XI, YI)
+            titulo = f"IDW (Power={idw_power})"
+
+        # ---- RBF ----
+        elif metodo == "RBF":
+            rbf = Rbf(x, y, z, function=rbf_func)
+            zi = rbf(XI, YI)
+            titulo = f"RBF ({rbf_func})"
+
+        # ---- KRIGING ----
+        elif metodo == "Kriging":
+            if kriging_type == "Ordinary":
+                k = OrdinaryKriging(
+                    x, y, z,
+                    variogram_model=kriging_model,
+                    verbose=False,
+                    enable_plotting=False
+                )
+            else:
+                k = UniversalKriging(
+                    x, y, z,
+                    variogram_model=kriging_model,
+                    verbose=False,
+                    enable_plotting=False
+                )
+
+            zi, _ = k.execute("grid", xi, yi)
+            titulo = f"Kriging {kriging_type} ({kriging_model})"
+
+        # ---- FIX CRÍTICO: NaN ----
+        zi = np.nan_to_num(zi, nan=np.nanmean(z))
+
+        # ------------------------------------------
+        # VISUALIZACIÓN
+        # ------------------------------------------
+        st.subheader(f"🗺 Resultado – {titulo}")
+
+        fig, ax = plt.subplots(figsize=(8, 6))
+
+        levels = np.linspace(np.nanmin(zi), np.nanmax(zi), 20)
+        c = ax.contourf(XI, YI, zi, levels=levels, cmap=colormap)
+
+        sc = ax.scatter(x, y, c=z, cmap=colormap, edgecolor="black", s=50)
+
+        for _, row in df.iterrows():
+            ax.annotate(
+                row["punto"],
+                (row["x"], row["y"]),
+                textcoords="offset points",
+                xytext=(0, 5),
+                ha="center",
+                fontsize=8,
             )
-            zi, _ = OK.execute("grid", xi[0, :], yi[:, 0])
 
-        else:
-            UK = UniversalKriging(
-                x, y, z,
-                variogram_model=kriging_model,
-                drift_terms=["regional_linear"],
-                verbose=False,
-                enable_plotting=False
-            )
-            zi, _ = UK.execute("grid", xi[0, :], yi[:, 0])
+        ax.set_xlabel("X")
+        ax.set_ylabel("Y")
+        ax.set_title(titulo)
+        ax.grid(alpha=0.4)
 
-    else:
-        zi = None
+        plt.colorbar(c, ax=ax, label="Z interpolado")
 
-    return zi
+        st.pyplot(fig)
 
-# =========================
-# 4. EJECUTAR
-# =========================
-if st.button("▶ Ejecutar Interpolación"):
-    with st.spinner("Interpolando..."):
-        zi = ejecutar_interpolacion(
-            metodo,
-            idw_power=idw_power,
-            rbf_func=rbf_func,
-            kriging_type=kriging_type,
-            kriging_model=kriging_model
-        )
+    except Exception as e:
+        st.error(f"Error durante la interpolación: {e}")
 
-    st.success("Interpolación completada")
+# ------------------------------------------
+# VARIOGRAMAS
+# ------------------------------------------
+if df is not None and st.checkbox("📈 Ver análisis de variogramas"):
 
-    # =========================
-    # 5. GRÁFICO
-    # =========================
-    fig, ax = plt.subplots(figsize=(8, 6))
-    c = ax.contourf(xi, yi, zi, levels=20)
-    ax.scatter(x, y, c=z, edgecolor="k", s=40)
-    ax.set_title(f"Método: {metodo}")
-    plt.colorbar(c, ax=ax)
+    st.subheader("Análisis comparativo de variogramas")
 
+    coords = df[["x", "y"]].values
+    values = df["z"].values
+
+    models = ["spherical", "exponential", "gaussian", "matern", "stable", "cubic"]
+
+    fig, axs = plt.subplots(2, 3, figsize=(12, 6))
+    axs = axs.flatten()
+
+    for ax, model in zip(axs, models):
+        try:
+            V = skg.Variogram(coords, values, model=model, normalize=False)
+            V.plot(ax=ax, hist=False)
+            ax.set_title(f"{model} | RMSE={V.rmse:.2f}")
+        except Exception:
+            ax.text(0.5, 0.5, "Error", ha="center", va="center")
+
+    plt.tight_layout()
     st.pyplot(fig)
