@@ -215,8 +215,8 @@ if df is not None and st.button("▶ Ejecutar interpolación"):
     except Exception as e:
         st.error(f"Error durante la interpolación: {e}")
 
-# ------------------------------------------
-# VARIOGRAMAS (VERSIÓN ESTABLE)
+#-----------------------------------------
+# VARIOGRAMAS 
 # ------------------------------------------
 if df is not None and st.checkbox("📈 Ver análisis de variogramas"):
 
@@ -225,16 +225,14 @@ if df is not None and st.checkbox("📈 Ver análisis de variogramas"):
     coords = df[["x", "y"]].values
     values = df["z"].values
 
-    # Validación mínima
     if len(values) < 6:
-        st.warning("Se requieren al menos 6 puntos para calcular variogramas.")
+        st.warning("Se requieren al menos 6 puntos para el análisis de variogramas.")
         st.stop()
 
-    models = ["spherical", "exponential", "gaussian","power","linear"]
+    models = ["spherical", "exponential", "gaussian", "power", "linear"]
 
-    fig, axs = plt.subplots(2, 5, figsize=(14, 4))
-    if len(models) == 1:
-        axs = [axs]
+    fig, axs = plt.subplots(2, 3, figsize=(14, 8))
+    axs = axs.flatten()
 
     for ax, model in zip(axs, models):
         try:
@@ -247,33 +245,35 @@ if df is not None and st.checkbox("📈 Ver análisis de variogramas"):
                 maxlag="median",
             )
 
-            # Datos experimentales
-            ax.scatter(
-                V.bins,
-                V.experimental,
-                color="black",
-                label="Experimental",
-            )
+            # Plot protegido
+            V.plot(ax=ax, hist=False)
 
-            # Modelo ajustado
-            h = np.linspace(0, V.bins.max(), 100)
-            ax.plot(h, V.fitted_model(h), label="Modelo")
+            # RMSE seguro
+            rmse = getattr(V, "rmse", None)
+            rmse_txt = f"{rmse:.2f}" if rmse is not None else "N/A"
 
-            ax.set_title(f"Modelo: {model}")
-            ax.set_xlabel("Distancia")
-            ax.set_ylabel("Semivarianza")
-            ax.legend()
+            # Indicador modelo no acotado
+            nota = ""
+            if model in ["power", "linear"]:
+                nota = " (no acotado)"
+
+            ax.set_title(f"{model}{nota}\nRMSE: {rmse_txt}")
             ax.grid(alpha=0.3)
 
         except Exception as e:
             ax.text(
                 0.5,
                 0.5,
-                f"Error\n{model}",
+                f"Error con {model}",
                 ha="center",
                 va="center",
+                color="red",
                 fontsize=10,
             )
+
+    # Ocultar ejes sobrantes
+    for ax in axs[len(models):]:
+        ax.axis("off")
 
     plt.tight_layout()
     st.pyplot(fig)
