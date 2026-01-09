@@ -230,9 +230,9 @@ if df is not None and st.checkbox("📈 Ver análisis de variogramas"):
         st.warning("Se requieren al menos 6 puntos para calcular variogramas.")
         st.stop()
 
-    models = ["spherical", "exponential", "gaussian"]
+    models = ["spherical", "exponential", "gaussian","power","linear"]
 
-    fig, axs = plt.subplots(1, len(models), figsize=(14, 4))
+    fig, axs = plt.subplots(2, 5, figsize=(14, 4))
     if len(models) == 1:
         axs = [axs]
 
