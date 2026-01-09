@@ -187,6 +187,9 @@ metodo = st.sidebar.selectbox(
     ["Nearest", "Linear", "IDW", "RBF", "Kriging"]
 )
 
+st.sidebar.markdown("---")
+modo_docente = st.sidebar.toggle("🎓 Modo docente (explicaciones)")
+
 if metodo == "RBF":
     rbf_func = st.sidebar.selectbox(
         "Función RBF",
@@ -254,3 +257,27 @@ if df is not None and st.button("▶ Ejecutar interpolación"):
     ax.set_title(titulo)
     ax.grid(alpha=0.3)
     st.pyplot(fig)
+
+
+
+if modo_docente and metodo == "Linear":
+    with st.expander("📘 Interpolación Lineal – Fundamentos"):
+        st.markdown("""
+### Interpolación Lineal
+
+La interpolación lineal estima valores desconocidos asumiendo un cambio lineal entre puntos vecinos.
+
+**Fundamento matemático:**
+
+\\[
+y = y_1 + \\frac{(y_2 - y_1)}{(x_2 - x_1)} (x - x_1)
+\\]
+
+**Ventajas**
+- Muy rápida
+- Fácil de interpretar
+
+**Limitaciones**
+- No captura variabilidad no lineal
+- Puede generar superficies angulosas
+""")
