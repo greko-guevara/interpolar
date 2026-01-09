@@ -16,6 +16,16 @@ from pykrige.uk import UniversalKriging
 import skgstat as skg
 
 # ------------------------------------------
+# SESSION STATE
+# ------------------------------------------
+if "modelo_variograma" not in st.session_state:
+    st.session_state["modelo_variograma"] = None
+
+if "variogram_params" not in st.session_state:
+    st.session_state["variogram_params"] = None
+
+
+# ------------------------------------------
 # CONFIGURACIÓN GENERAL
 # ------------------------------------------
 st.set_page_config(
@@ -153,6 +163,24 @@ if df is not None and st.checkbox("📈 Ver análisis de variogramas"):
         f"✅ Variograma óptimo detectado automáticamente: **{modelo_variograma.capitalize()}**"
     )
 
+    V_sel = skg.Variogram(
+        coords,
+        values,
+        model=modelo_variograma,
+        n_lags=6,
+        normalize=False,
+        maxlag="median",
+    )
+
+    st.session_state["modelo_variograma"] = modelo_variograma
+    st.session_state["variogram_params"] = {
+        "range": float(V_sel.parameters[0]),
+        "sill": float(V_sel.parameters[1]),
+        "nugget": float(V_sel.parameters[2]) if len(V_sel.parameters) > 2 else 0.0,
+        }
+
+
+
     modo_variograma = st.radio(
     "Modo de selección de variograma",
     ["Automático (RMSE)", "Manual"],
@@ -180,7 +208,8 @@ if modo_variograma == "Manual":
         maxlag="median",
     )
 
-    variogram_params = {
+    st.session_state["modelo_variograma"] = modelo_variograma
+    st.session_state["variogram_params"] = {
         "range": float(V_sel.parameters[0]),
         "sill": float(V_sel.parameters[1]),
         "nugget": float(V_sel.parameters[2]) if len(V_sel.parameters) > 2 else 0.0,
@@ -251,6 +280,9 @@ if metodo == "Kriging":
 # ------------------------------------------
 # INTERPOLACIÓN
 # ------------------------------------------
+modelo_variograma = st.session_state.get("modelo_variograma")
+variogram_params = st.session_state.get("variogram_params")
+
 if df is not None and st.button("▶ Ejecutar interpolación"):
 
     x, y, z = df["x"].values, df["y"].values, df["z"].values
@@ -278,9 +310,11 @@ if df is not None and st.button("▶ Ejecutar interpolación"):
         titulo = f"RBF ({rbf_func})"
 
     elif metodo == "Kriging":
-        if variogram_params is None:
-            st.error("Debe calcular y seleccionar un variograma primero.")
-            st.stop()
+        if metodo == "Kriging":
+            if modelo_variograma is None or variogram_params is None:
+                st.error("⚠️ Primero debe calcular el variograma (automático o manual).")
+                st.stop()
+
 
         if kriging_type == "Ordinary":
             k = OrdinaryKriging(
