@@ -162,11 +162,15 @@ if df is not None and st.button("▶ Ejecutar interpolación"):
         elif metodo == "Kriging":
             if kriging_type == "Ordinary":
                 k = OrdinaryKriging(
-                    x, y, z,
-                    variogram_model=kriging_model,
+                    x,
+                    y,
+                    z,
+                    variogram_model=modelo_variograma,
+                    variogram_parameters=variogram_params,
                     verbose=False,
-                    enable_plotting=False
-                )
+                    enable_plotting=False,
+    )
+
             else:
                 k = UniversalKriging(
                     x, y, z,
@@ -277,3 +281,26 @@ if df is not None and st.checkbox("📈 Ver análisis de variogramas"):
 
     plt.tight_layout()
     st.pyplot(fig)
+
+
+st.subheader("Selección de variograma para Kriging")
+
+# ------------------------------------------
+# seleccion de variograma
+# ------------------------------------------
+
+modelo_variograma = st.selectbox(
+    "Modelo de variograma a utilizar",
+    ["spherical", "exponential", "gaussian"]
+)
+
+V_sel = skg.Variogram(
+    coords,
+    values,
+    model=modelo_variograma,
+    n_lags=6,
+    normalize=False,
+    maxlag="median",
+)
+st.write("Parámetros del variograma seleccionado")
+st.json(variogram_params)
