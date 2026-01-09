@@ -16,16 +16,6 @@ from pykrige.uk import UniversalKriging
 import skgstat as skg
 
 # ------------------------------------------
-# SESSION STATE
-# ------------------------------------------
-if "modelo_variograma" not in st.session_state:
-    st.session_state["modelo_variograma"] = None
-
-if "variogram_params" not in st.session_state:
-    st.session_state["variogram_params"] = None
-
-
-# ------------------------------------------
 # CONFIGURACIÓN GENERAL
 # ------------------------------------------
 st.set_page_config(
@@ -35,6 +25,18 @@ st.set_page_config(
 
 st.title("🌍 Inter-Polar – Métodos de Interpolación")
 st.caption("Versión Streamlit | Geoestadística aplicada")
+
+# ------------------------------------------
+# SESSION STATE (FUENTE ÚNICA DE VERDAD)
+# ------------------------------------------
+if "modelo_variograma" not in st.session_state:
+    st.session_state.modelo_variograma = None
+
+if "variogram_params" not in st.session_state:
+    st.session_state.variogram_params = None
+
+if "modo_variograma" not in st.session_state:
+    st.session_state.modo_variograma = "Automático (RMSE)"
 
 # ------------------------------------------
 # SIDEBAR – CARGA DE DATOS
@@ -86,157 +88,93 @@ if df is not None:
 # ------------------------------------------
 # VARIOGRAMAS
 # ------------------------------------------
-variogram_params = None
-modelo_variograma = None
-
 if df is not None and st.checkbox("📈 Ver análisis de variogramas"):
 
     st.subheader("Análisis comparativo de variogramas")
 
-    models = ["spherical", "exponential", "gaussian"]
+    modelos = ["spherical", "exponential", "gaussian"]
 
-    fig, axs = plt.subplots(1, len(models), figsize=(14, 4))
+    fig, axs = plt.subplots(1, len(modelos), figsize=(14, 4))
 
-    for ax, model in zip(axs, models):
+    for ax, model in zip(axs, modelos):
         V = skg.Variogram(
-            coords,
-            values,
+            coords, values,
             model=model,
             n_lags=6,
-            normalize=False,
             maxlag="median",
+            normalize=False,
         )
-
-        ax.scatter(V.bins, V.experimental, color="black", label="Experimental")
-
+        ax.scatter(V.bins, V.experimental, color="black")
         h = np.linspace(0, V.bins.max(), 100)
-        ax.plot(h, V.fitted_model(h), label="Modelo")
-
-        ax.set_title(model)
-        ax.set_xlabel("Distancia")
-        ax.set_ylabel("Semivarianza")
+        ax.plot(h, V.fitted_model(h))
+        ax.set_title(model.capitalize())
         ax.grid(alpha=0.3)
-        ax.legend()
 
     st.pyplot(fig)
 
-    st.subheader("Selección de variograma para Kriging")
-
-
-    st.subheader("🤖 Selección automática del mejor variograma")
-
-    models = ["spherical", "exponential", "gaussian"]
-    rmse_results = {}
-
-    for model in models:
+    # ------------------------------
+    # SELECCIÓN AUTOMÁTICA
+    # ------------------------------
+    rmse = {}
+    for model in modelos:
         try:
-            V = skg.Variogram(
-                coords,
-                values,
-                model=model,
-                n_lags=6,
-                normalize=False,
-                maxlag="median",
-            )
-
-            rmse_results[model] = V.rmse
-
+            V = skg.Variogram(coords, values, model=model, n_lags=6, maxlag="median")
+            rmse[model] = V.rmse
         except Exception:
-            rmse_results[model] = np.inf
+            rmse[model] = np.inf
 
+    rmse_df = pd.DataFrame.from_dict(rmse, orient="index", columns=["RMSE"]).sort_values("RMSE")
+    st.dataframe(rmse_df.style.highlight_min(color="#b6f5c9"))
 
-    rmse_df = (
-        pd.DataFrame.from_dict(rmse_results, orient="index", columns=["RMSE"])
-        .sort_values("RMSE")
-    )
+    mejor_modelo = rmse_df.index[0]
 
-    st.dataframe(
-        rmse_df.style
-        .highlight_min(color="#b6f5c9")
-        .format("{:.4f}"),
-        use_container_width=True
-    )
+    # Guardar automático
+    V_auto = skg.Variogram(coords, values, model=mejor_modelo, n_lags=6, maxlag="median")
 
-    modelo_variograma = rmse_df.index[0]
-
-    st.success(
-        f"✅ Variograma óptimo detectado automáticamente: **{modelo_variograma.capitalize()}**"
-    )
-
-    V_sel = skg.Variogram(
-        coords,
-        values,
-        model=modelo_variograma,
-        n_lags=6,
-        normalize=False,
-        maxlag="median",
-    )
-
-    st.session_state["modelo_variograma"] = modelo_variograma
-    st.session_state["variogram_params"] = {
-        "range": float(V_sel.parameters[0]),
-        "sill": float(V_sel.parameters[1]),
-        "nugget": float(V_sel.parameters[2]) if len(V_sel.parameters) > 2 else 0.0,
-        }
-
-
-
-    modo_variograma = st.radio(
-    "Modo de selección de variograma",
-    ["Automático (RMSE)", "Manual"],
-    horizontal=True
-    )
-
-if modo_variograma == "Manual":
-    modelo_variograma = st.selectbox(
-        "Modelo de variograma",
-        models
-    )
-
-
-    modelo_variograma = st.selectbox(
-        "Modelo de variograma a utilizar",
-        models
-    )
-
-    V_sel = skg.Variogram(
-        coords,
-        values,
-        model=modelo_variograma,
-        n_lags=6,
-        normalize=False,
-        maxlag="median",
-    )
-
-    st.session_state["modelo_variograma"] = modelo_variograma
-    st.session_state["variogram_params"] = {
-        "range": float(V_sel.parameters[0]),
-        "sill": float(V_sel.parameters[1]),
-        "nugget": float(V_sel.parameters[2]) if len(V_sel.parameters) > 2 else 0.0,
+    st.session_state.modelo_variograma = mejor_modelo
+    st.session_state.variogram_params = {
+        "range": float(V_auto.parameters[0]),
+        "sill": float(V_auto.parameters[1]),
+        "nugget": float(V_auto.parameters[2]) if len(V_auto.parameters) > 2 else 0.0,
     }
 
-    st.markdown("### 📌 Variograma seleccionado")
+    st.success(f"Variograma automático óptimo: **{mejor_modelo.capitalize()}**")
 
-    c1, c2, c3 = st.columns(3)
-
-    c1.metric("Modelo", modelo_variograma.capitalize())
-    c2.metric("Rango", f"{variogram_params['range']:.3f}")
-    c3.metric("Sill", f"{variogram_params['sill']:.3f}")
-
-    st.markdown(
-        f"""
-        **Interpretación rápida:**
-        - 📏 **Rango**: hasta ~{variogram_params['range']:.2f} unidades existe correlación espacial  
-        - 📈 **Sill**: varianza estructural ≈ {variogram_params['sill']:.2f}  
-        - 🔹 **Nugget**: {'despreciable' if variogram_params['nugget']==0 else variogram_params['nugget']}
-        """
+    # ------------------------------
+    # MODO DE SELECCIÓN
+    # ------------------------------
+    st.session_state.modo_variograma = st.radio(
+        "Modo de selección",
+        ["Automático (RMSE)", "Manual"],
+        horizontal=True
     )
 
+    if st.session_state.modo_variograma == "Manual":
+        modelo_manual = st.selectbox("Modelo de variograma", modelos)
+
+        V_man = skg.Variogram(coords, values, model=modelo_manual, n_lags=6, maxlag="median")
+
+        st.session_state.modelo_variograma = modelo_manual
+        st.session_state.variogram_params = {
+            "range": float(V_man.parameters[0]),
+            "sill": float(V_man.parameters[1]),
+            "nugget": float(V_man.parameters[2]) if len(V_man.parameters) > 2 else 0.0,
+        }
+
+    # ------------------------------
+    # MOSTRAR PARÁMETROS
+    # ------------------------------
+    vp = st.session_state.variogram_params
+    if vp is not None:
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Modelo", st.session_state.modelo_variograma.capitalize())
+        c2.metric("Rango", f"{vp['range']:.3f}")
+        c3.metric("Sill", f"{vp['sill']:.3f}")
 
 # ------------------------------------------
-# SIDEBAR – PARÁMETROS DE INTERPOLACIÓN
+# SIDEBAR – INTERPOLACIÓN
 # ------------------------------------------
-st.sidebar.header("2️⃣ Parámetros generales")
+st.sidebar.header("2️⃣ Parámetros")
 
 grid_size = st.sidebar.slider("Tamaño de malla", 30, 200, 100)
 colormap = st.sidebar.selectbox(
@@ -244,49 +182,26 @@ colormap = st.sidebar.selectbox(
     ["viridis", "plasma", "inferno", "magma", "cividis"]
 )
 
-st.sidebar.header("3️⃣ Método de interpolación")
-
 metodo = st.sidebar.selectbox(
-    "Seleccione método",
+    "Método",
     ["Nearest", "Linear", "IDW", "RBF", "Kriging"]
 )
-
-idw_power = None
-rbf_func = None
-kriging_type = None
-
-if metodo == "IDW":
-    idw_power = st.sidebar.selectbox("Power (IDW)", [1, 2, 3, 4], index=1)
 
 if metodo == "RBF":
     rbf_func = st.sidebar.selectbox(
         "Función RBF",
-        [
-            "linear",
-            "thin_plate_spline",
-            "cubic",
-            "quintic",
-            "multiquadric",
-            "inverse_multiquadric",
-            "gaussian",
-        ]
+        ["linear", "thin_plate_spline", "cubic", "quintic", "multiquadric", "gaussian"]
     )
 
 if metodo == "Kriging":
-    kriging_type = st.sidebar.selectbox(
-        "Tipo de Kriging", ["Ordinary", "Universal"]
-    )
+    kriging_type = st.sidebar.selectbox("Tipo de Kriging", ["Ordinary", "Universal"])
 
 # ------------------------------------------
 # INTERPOLACIÓN
 # ------------------------------------------
-modelo_variograma = st.session_state.get("modelo_variograma")
-variogram_params = st.session_state.get("variogram_params")
-
 if df is not None and st.button("▶ Ejecutar interpolación"):
 
     x, y, z = df["x"].values, df["y"].values, df["z"].values
-
     xi = np.linspace(x.min(), x.max(), grid_size)
     yi = np.linspace(y.min(), y.max(), grid_size)
     XI, YI = np.meshgrid(xi, yi)
@@ -302,7 +217,7 @@ if df is not None and st.button("▶ Ejecutar interpolación"):
     elif metodo == "IDW":
         rbf = Rbf(x, y, z, function="inverse_multiquadric")
         zi = rbf(XI, YI)
-        titulo = f"IDW (Power={idw_power})"
+        titulo = "IDW"
 
     elif metodo == "RBF":
         rbf = Rbf(x, y, z, function=rbf_func)
@@ -310,47 +225,32 @@ if df is not None and st.button("▶ Ejecutar interpolación"):
         titulo = f"RBF ({rbf_func})"
 
     elif metodo == "Kriging":
-        if metodo == "Kriging":
-            if modelo_variograma is None or variogram_params is None:
-                st.error("⚠️ Primero debe calcular el variograma (automático o manual).")
-                st.stop()
-
+        if st.session_state.variogram_params is None:
+            st.error("Debe calcular el variograma primero.")
+            st.stop()
 
         if kriging_type == "Ordinary":
             k = OrdinaryKriging(
                 x, y, z,
-                variogram_model=modelo_variograma,
-                variogram_parameters=variogram_params,
-                verbose=False,
-                enable_plotting=False,
+                variogram_model=st.session_state.modelo_variograma,
+                variogram_parameters=st.session_state.variogram_params,
             )
         else:
             k = UniversalKriging(
                 x, y, z,
-                variogram_model=modelo_variograma,
-                variogram_parameters=variogram_params,
-                verbose=False,
-                enable_plotting=False,
+                variogram_model=st.session_state.modelo_variograma,
+                variogram_parameters=st.session_state.variogram_params,
             )
 
         zi, _ = k.execute("grid", xi, yi)
-        titulo = f"Kriging {kriging_type} ({modelo_variograma})"
+        titulo = f"Kriging {kriging_type}"
 
     zi = np.nan_to_num(zi, nan=np.nanmean(z))
 
-    st.subheader(f"🗺 Resultado – {titulo}")
-
     fig, ax = plt.subplots(figsize=(8, 6))
     c = ax.contourf(XI, YI, zi, 20, cmap=colormap)
-    ax.scatter(x, y, c=z, cmap=colormap, edgecolor="black", s=50)
-
-    for _, r in df.iterrows():
-        ax.annotate(r["punto"], (r["x"], r["y"]), fontsize=8)
-
+    ax.scatter(x, y, c=z, cmap=colormap, edgecolor="black")
     plt.colorbar(c, ax=ax)
-    ax.set_xlabel("X")
-    ax.set_ylabel("Y")
     ax.set_title(titulo)
     ax.grid(alpha=0.3)
-
     st.pyplot(fig)
