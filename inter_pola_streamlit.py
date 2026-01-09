@@ -112,6 +112,60 @@ if df is not None and st.checkbox("📈 Ver análisis de variogramas"):
 
     st.subheader("Selección de variograma para Kriging")
 
+
+    st.subheader("🤖 Selección automática del mejor variograma")
+
+    models = ["spherical", "exponential", "gaussian"]
+    rmse_results = {}
+
+    for model in models:
+        try:
+            V = skg.Variogram(
+                coords,
+                values,
+                model=model,
+                n_lags=6,
+                normalize=False,
+                maxlag="median",
+            )
+
+            rmse_results[model] = V.rmse
+
+        except Exception:
+            rmse_results[model] = np.inf
+
+
+    rmse_df = (
+        pd.DataFrame.from_dict(rmse_results, orient="index", columns=["RMSE"])
+        .sort_values("RMSE")
+    )
+
+    st.dataframe(
+        rmse_df.style
+        .highlight_min(color="#b6f5c9")
+        .format("{:.4f}"),
+        use_container_width=True
+    )
+
+    modelo_variograma = rmse_df.index[0]
+
+    st.success(
+        f"✅ Variograma óptimo detectado automáticamente: **{modelo_variograma.capitalize()}**"
+    )
+
+    modo_variograma = st.radio(
+    "Modo de selección de variograma",
+    ["Automático (RMSE)", "Manual"],
+    horizontal=True
+    )
+
+if modo_variograma == "Manual":
+    modelo_variograma = st.selectbox(
+        "Modelo de variograma",
+        models
+    )
+
+
     modelo_variograma = st.selectbox(
         "Modelo de variograma a utilizar",
         models
@@ -132,8 +186,23 @@ if df is not None and st.checkbox("📈 Ver análisis de variogramas"):
         "nugget": float(V_sel.parameters[2]) if len(V_sel.parameters) > 2 else 0.0,
     }
 
-    st.write("📌 Parámetros del variograma seleccionado")
-    st.json(variogram_params)
+    st.markdown("### 📌 Variograma seleccionado")
+
+    c1, c2, c3 = st.columns(3)
+
+    c1.metric("Modelo", modelo_variograma.capitalize())
+    c2.metric("Rango", f"{variogram_params['range']:.3f}")
+    c3.metric("Sill", f"{variogram_params['sill']:.3f}")
+
+    st.markdown(
+        f"""
+        **Interpretación rápida:**
+        - 📏 **Rango**: hasta ~{variogram_params['range']:.2f} unidades existe correlación espacial  
+        - 📈 **Sill**: varianza estructural ≈ {variogram_params['sill']:.2f}  
+        - 🔹 **Nugget**: {'despreciable' if variogram_params['nugget']==0 else variogram_params['nugget']}
+        """
+    )
+
 
 # ------------------------------------------
 # SIDEBAR – PARÁMETROS DE INTERPOLACIÓN
