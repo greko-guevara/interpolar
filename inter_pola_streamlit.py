@@ -70,8 +70,73 @@ if df is not None:
 
     st.dataframe(df, use_container_width=True)
 
+    coords = df[["x", "y"]].values
+    values = df["z"].values
+
 # ------------------------------------------
-# SIDEBAR – PARÁMETROS
+# VARIOGRAMAS
+# ------------------------------------------
+variogram_params = None
+modelo_variograma = None
+
+if df is not None and st.checkbox("📈 Ver análisis de variogramas"):
+
+    st.subheader("Análisis comparativo de variogramas")
+
+    models = ["spherical", "exponential", "gaussian"]
+
+    fig, axs = plt.subplots(1, len(models), figsize=(14, 4))
+
+    for ax, model in zip(axs, models):
+        V = skg.Variogram(
+            coords,
+            values,
+            model=model,
+            n_lags=6,
+            normalize=False,
+            maxlag="median",
+        )
+
+        ax.scatter(V.bins, V.experimental, color="black", label="Experimental")
+
+        h = np.linspace(0, V.bins.max(), 100)
+        ax.plot(h, V.fitted_model(h), label="Modelo")
+
+        ax.set_title(model)
+        ax.set_xlabel("Distancia")
+        ax.set_ylabel("Semivarianza")
+        ax.grid(alpha=0.3)
+        ax.legend()
+
+    st.pyplot(fig)
+
+    st.subheader("Selección de variograma para Kriging")
+
+    modelo_variograma = st.selectbox(
+        "Modelo de variograma a utilizar",
+        models
+    )
+
+    V_sel = skg.Variogram(
+        coords,
+        values,
+        model=modelo_variograma,
+        n_lags=6,
+        normalize=False,
+        maxlag="median",
+    )
+
+    variogram_params = {
+        "range": float(V_sel.parameters[0]),
+        "sill": float(V_sel.parameters[1]),
+        "nugget": float(V_sel.parameters[2]) if len(V_sel.parameters) > 2 else 0.0,
+    }
+
+    st.write("📌 Parámetros del variograma seleccionado")
+    st.json(variogram_params)
+
+# ------------------------------------------
+# SIDEBAR – PARÁMETROS DE INTERPOLACIÓN
 # ------------------------------------------
 st.sidebar.header("2️⃣ Parámetros generales")
 
@@ -88,11 +153,9 @@ metodo = st.sidebar.selectbox(
     ["Nearest", "Linear", "IDW", "RBF", "Kriging"]
 )
 
-# --- Hiperparámetros ---
 idw_power = None
 rbf_func = None
 kriging_type = None
-kriging_model = None
 
 if metodo == "IDW":
     idw_power = st.sidebar.selectbox("Power (IDW)", [1, 2, 3, 4], index=1)
@@ -115,192 +178,76 @@ if metodo == "Kriging":
     kriging_type = st.sidebar.selectbox(
         "Tipo de Kriging", ["Ordinary", "Universal"]
     )
-    kriging_model = st.sidebar.selectbox(
-        "Modelo de variograma",
-        ["linear", "power", "gaussian", "spherical", "exponential"]
-    )
 
 # ------------------------------------------
 # INTERPOLACIÓN
 # ------------------------------------------
 if df is not None and st.button("▶ Ejecutar interpolación"):
 
-    x = df["x"].values
-    y = df["y"].values
-    z = df["z"].values
+    x, y, z = df["x"].values, df["y"].values, df["z"].values
 
     xi = np.linspace(x.min(), x.max(), grid_size)
     yi = np.linspace(y.min(), y.max(), grid_size)
     XI, YI = np.meshgrid(xi, yi)
 
-    zi = None
-    titulo = ""
+    if metodo == "Nearest":
+        zi = griddata((x, y), z, (XI, YI), method="nearest")
+        titulo = "Vecinos Próximos"
 
-    try:
-        # ---- GRIDDATA ----
-        if metodo == "Nearest":
-            zi = griddata((x, y), z, (XI, YI), method="nearest")
-            titulo = "Vecinos Próximos"
+    elif metodo == "Linear":
+        zi = griddata((x, y), z, (XI, YI), method="linear")
+        titulo = "Interpolación Lineal"
 
-        elif metodo == "Linear":
-            zi = griddata((x, y), z, (XI, YI), method="linear")
-            titulo = "Interpolación Lineal"
+    elif metodo == "IDW":
+        rbf = Rbf(x, y, z, function="inverse_multiquadric")
+        zi = rbf(XI, YI)
+        titulo = f"IDW (Power={idw_power})"
 
-        # ---- IDW (RBF) ----
-        elif metodo == "IDW":
-            rbf = Rbf(x, y, z, function="inverse_multiquadric")
-            zi = rbf(XI, YI)
-            titulo = f"IDW (Power={idw_power})"
+    elif metodo == "RBF":
+        rbf = Rbf(x, y, z, function=rbf_func)
+        zi = rbf(XI, YI)
+        titulo = f"RBF ({rbf_func})"
 
-        # ---- RBF ----
-        elif metodo == "RBF":
-            rbf = Rbf(x, y, z, function=rbf_func)
-            zi = rbf(XI, YI)
-            titulo = f"RBF ({rbf_func})"
+    elif metodo == "Kriging":
+        if variogram_params is None:
+            st.error("Debe calcular y seleccionar un variograma primero.")
+            st.stop()
 
-        # ---- KRIGING ----
-        elif metodo == "Kriging":
-            if kriging_type == "Ordinary":
-                k = OrdinaryKriging(
-                    x,
-                    y,
-                    z,
-                    variogram_model=modelo_variograma,
-                    variogram_parameters=variogram_params,
-                    verbose=False,
-                    enable_plotting=False,
-    )
-
-            else:
-                k = UniversalKriging(
-                    x, y, z,
-                    variogram_model=kriging_model,
-                    verbose=False,
-                    enable_plotting=False
-                )
-
-            zi, _ = k.execute("grid", xi, yi)
-            titulo = f"Kriging {kriging_type} ({kriging_model})"
-
-        # ---- FIX CRÍTICO: NaN ----
-        zi = np.nan_to_num(zi, nan=np.nanmean(z))
-
-        # ------------------------------------------
-        # VISUALIZACIÓN
-        # ------------------------------------------
-        st.subheader(f"🗺 Resultado – {titulo}")
-
-        fig, ax = plt.subplots(figsize=(8, 6))
-
-        levels = np.linspace(np.nanmin(zi), np.nanmax(zi), 20)
-        c = ax.contourf(XI, YI, zi, levels=levels, cmap=colormap)
-
-        sc = ax.scatter(x, y, c=z, cmap=colormap, edgecolor="black", s=50)
-
-        for _, row in df.iterrows():
-            ax.annotate(
-                row["punto"],
-                (row["x"], row["y"]),
-                textcoords="offset points",
-                xytext=(0, 5),
-                ha="center",
-                fontsize=8,
+        if kriging_type == "Ordinary":
+            k = OrdinaryKriging(
+                x, y, z,
+                variogram_model=modelo_variograma,
+                variogram_parameters=variogram_params,
+                verbose=False,
+                enable_plotting=False,
+            )
+        else:
+            k = UniversalKriging(
+                x, y, z,
+                variogram_model=modelo_variograma,
+                variogram_parameters=variogram_params,
+                verbose=False,
+                enable_plotting=False,
             )
 
-        ax.set_xlabel("X")
-        ax.set_ylabel("Y")
-        ax.set_title(titulo)
-        ax.grid(alpha=0.4)
+        zi, _ = k.execute("grid", xi, yi)
+        titulo = f"Kriging {kriging_type} ({modelo_variograma})"
 
-        plt.colorbar(c, ax=ax, label="Z interpolado")
+    zi = np.nan_to_num(zi, nan=np.nanmean(z))
 
-        st.pyplot(fig)
+    st.subheader(f"🗺 Resultado – {titulo}")
 
-    except Exception as e:
-        st.error(f"Error durante la interpolación: {e}")
+    fig, ax = plt.subplots(figsize=(8, 6))
+    c = ax.contourf(XI, YI, zi, 20, cmap=colormap)
+    ax.scatter(x, y, c=z, cmap=colormap, edgecolor="black", s=50)
 
-# ------------------------------------------
-# VARIOGRAMAS (VERSIÓN ESTABLE)
-# ------------------------------------------
-if df is not None and st.checkbox("📈 Ver análisis de variogramas"):
+    for _, r in df.iterrows():
+        ax.annotate(r["punto"], (r["x"], r["y"]), fontsize=8)
 
-    st.subheader("Análisis comparativo de variogramas")
+    plt.colorbar(c, ax=ax)
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_title(titulo)
+    ax.grid(alpha=0.3)
 
-    coords = df[["x", "y"]].values
-    values = df["z"].values
-
-    # Validación mínima
-    if len(values) < 6:
-        st.warning("Se requieren al menos 6 puntos para calcular variogramas.")
-        st.stop()
-
-    models = ["spherical", "exponential", "gaussian"]
-
-    fig, axs = plt.subplots(1, len(models), figsize=(14, 4))
-    if len(models) == 1:
-        axs = [axs]
-
-    for ax, model in zip(axs, models):
-        try:
-            V = skg.Variogram(
-                coords,
-                values,
-                model=model,
-                n_lags=6,
-                normalize=False,
-                maxlag="median",
-            )
-
-            # Datos experimentales
-            ax.scatter(
-                V.bins,
-                V.experimental,
-                color="black",
-                label="Experimental",
-            )
-
-            # Modelo ajustado
-            h = np.linspace(0, V.bins.max(), 100)
-            ax.plot(h, V.fitted_model(h), label="Modelo")
-
-            ax.set_title(f"Modelo: {model}")
-            ax.set_xlabel("Distancia")
-            ax.set_ylabel("Semivarianza")
-            ax.legend()
-            ax.grid(alpha=0.3)
-
-        except Exception as e:
-            ax.text(
-                0.5,
-                0.5,
-                f"Error\n{model}",
-                ha="center",
-                va="center",
-                fontsize=10,
-            )
-
-    plt.tight_layout()
     st.pyplot(fig)
-
-
-st.subheader("Selección de variograma para Kriging")
-
-# ------------------------------------------
-# seleccion de variograma
-# ------------------------------------------
-
-modelo_variograma = st.selectbox(
-    "Modelo de variograma a utilizar",
-    ["spherical", "exponential", "gaussian"]
-)
-
-V_sel = skg.Variogram(
-    coords,
-    values,
-    model=modelo_variograma,
-    n_lags=6,
-    normalize=False,
-    maxlag="median",
-)
-st.write("Parámetros del variograma seleccionado")
-st.json(variogram_params)
