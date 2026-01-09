@@ -216,7 +216,7 @@ if df is not None and st.button("▶ Ejecutar interpolación"):
         st.error(f"Error durante la interpolación: {e}")
 
 # ------------------------------------------
-# VARIOGRAMAS
+# VARIOGRAMAS (VERSIÓN ESTABLE)
 # ------------------------------------------
 if df is not None and st.checkbox("📈 Ver análisis de variogramas"):
 
@@ -225,18 +225,55 @@ if df is not None and st.checkbox("📈 Ver análisis de variogramas"):
     coords = df[["x", "y"]].values
     values = df["z"].values
 
-    models = ["spherical", "exponential", "gaussian", "matern", "stable", "cubic"]
+    # Validación mínima
+    if len(values) < 6:
+        st.warning("Se requieren al menos 6 puntos para calcular variogramas.")
+        st.stop()
 
-    fig, axs = plt.subplots(2, 3, figsize=(12, 6))
-    axs = axs.flatten()
+    models = ["spherical", "exponential", "gaussian"]
+
+    fig, axs = plt.subplots(1, len(models), figsize=(14, 4))
+    if len(models) == 1:
+        axs = [axs]
 
     for ax, model in zip(axs, models):
         try:
-            V = skg.Variogram(coords, values, model=model, normalize=False)
-            V.plot(ax=ax, hist=False)
-            ax.set_title(f"{model} | RMSE={V.rmse:.2f}")
-        except Exception:
-            ax.text(0.5, 0.5, "Error", ha="center", va="center")
+            V = skg.Variogram(
+                coords,
+                values,
+                model=model,
+                n_lags=6,
+                normalize=False,
+                maxlag="median",
+            )
+
+            # Datos experimentales
+            ax.scatter(
+                V.bins,
+                V.experimental,
+                color="black",
+                label="Experimental",
+            )
+
+            # Modelo ajustado
+            h = np.linspace(0, V.bins.max(), 100)
+            ax.plot(h, V.fitted_model(h), label="Modelo")
+
+            ax.set_title(f"Modelo: {model}")
+            ax.set_xlabel("Distancia")
+            ax.set_ylabel("Semivarianza")
+            ax.legend()
+            ax.grid(alpha=0.3)
+
+        except Exception as e:
+            ax.text(
+                0.5,
+                0.5,
+                f"Error\n{model}",
+                ha="center",
+                va="center",
+                fontsize=10,
+            )
 
     plt.tight_layout()
     st.pyplot(fig)
