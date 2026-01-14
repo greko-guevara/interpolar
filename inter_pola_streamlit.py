@@ -24,206 +24,222 @@ st.set_page_config(
 
 st.title("🌍 Inter-Polar – Métodos de Interpolación")
 st.caption("Versión Streamlit | Geoestadística aplicada")
-with st.expander("📘 Ayuda teórica — Interpolación de Datos (Fundamentos y Métodos)", expanded=False):
-    st.markdown(r"""
-# Introducción a la Interpolación de Datos
+with st.expander("📘 Ayuda teórica — Fundamentos de Interpolación Espacial"):
+    st.markdown("""
+## Introducción a la Interpolación de Datos  
 **Prof. Gregory Guevara**  
 **Universidad EARTH**  
-_Enero 2026_
+**Enero 2026**
 
-La **interpolación de datos** es el proceso mediante el cual se estiman valores desconocidos
-a partir de un conjunto de datos discretos conocidos.  
+La **interpolación de datos** es un proceso matemático utilizado para estimar valores desconocidos
+dentro de un dominio espacial o temporal a partir de un conjunto de datos discretos conocidos.
+
 Es ampliamente utilizada en:
+- hidrología
+- geofísica
+- meteorología
+- ciencias del suelo
+- cartografía y SIG
 
-- Hidrología
-- Meteorología
-- Geofísica
-- Cartografía
-- Ciencias ambientales
+El objetivo principal es **construir superficies continuas** que representen fenómenos naturales
+a partir de observaciones puntuales.
+""")
 
-El objetivo es construir **superficies continuas** que representen de forma razonable
-el comportamiento espacial de una variable medida en puntos discretos.
+    # -------------------------------------------------
+    st.markdown("## 1. Interpolación Lineal")
 
----
+    st.markdown("**Fundamento matemático**")
+    st.markdown("Entre dos puntos conocidos \\((x_1, y_1)\\) y \\((x_2, y_2)\\):")
 
-## ¿Cuándo es apropiado interpolar?
+    st.latex(r"""
+    y = y_1 + \frac{(y_2 - y_1)}{(x_2 - x_1)} (x - x_1)
+    """)
 
-La interpolación es adecuada cuando:
-
-- Existe **continuidad espacial** del fenómeno
-- Los puntos de muestreo representan bien el dominio
-- No se extrapola fuera del rango de los datos
-
-⚠️ **Advertencia**: interpolar no significa “crear información nueva”, sino
-**inferir patrones espaciales existentes**.
-
----
-
-## 1. Interpolación Lineal
-
-### Fundamento matemático
-Entre dos puntos \((x_1, y_1)\) y \((x_2, y_2)\):
-
-\[
-y = y_1 + \frac{(y_2 - y_1)}{(x_2 - x_1)} (x - x_1)
-\]
-
-### Ventajas
-- Muy rápida
-- Fácil de implementar
-
-### Desventajas
-- No captura comportamiento no lineal
-- Genera quiebres en superficies espaciales
-
-### Uso recomendado
-- Análisis exploratorio
+    st.markdown("""
+**Aplicaciones**
 - Gráficos simples
-- Series 1D
+- Estimaciones rápidas
+- Preprocesamiento de datos
 
----
+**Ventajas**
+- Muy fácil de implementar
+- Bajo costo computacional
 
-## 2. Vecinos Próximos (Nearest Neighbors)
+**Desventajas**
+- No representa bien fenómenos no lineales
+- Genera superficies angulosas
+""")
 
-### Fundamento matemático
-\[
-Z(x) = Z(x_i) \quad \text{con} \quad x_i = \arg \min \|x - x_i\|
-\]
+    # -------------------------------------------------
+    st.markdown("## 2. Vecinos Próximos (Nearest Neighbors)")
 
-### Ventajas
+    st.markdown("**Fundamento matemático**")
+
+    st.latex(r"""
+    Z(x) = Z(x_i) \quad \text{donde} \quad
+    x_i = \arg \min_{x_j \in S} \| x - x_j \|
+    """)
+
+    st.markdown("""
+**Aplicaciones**
+- Resampling de imágenes
+- Clasificación espacial preliminar
+
+**Ventajas**
 - Extremadamente rápido
 - No requiere parámetros
 
-### Desventajas
+**Desventajas**
 - Superficies discontinuas
-- Muy sensible a la distribución de puntos
-
-### Uso recomendado
-- Clasificaciones
-- Mapas preliminares
-- Remuestreo de imágenes
-
----
-
-## 3. Inverso de la Distancia Ponderado (IDW)
-
-### Fundamento matemático
-\[
-Z(x) =
-\frac{\sum_{i=1}^{n} \frac{Z(x_i)}{d(x,x_i)^p}}
-{\sum_{i=1}^{n} \frac{1}{d(x,x_i)^p}}
-\]
-
-Donde:
-- \(p\) controla la influencia de la distancia
-
-### Ventajas
-- Intuitivo
-- Fácil implementación
-
-### Desventajas
-- No modela tendencias globales
-- Puede generar “bullseyes”
-
----
-
-## 4. Funciones de Base Radial (RBF)
-
-### Modelo general
-\[
-f(x,y) = \sum_{i=1}^{n} \lambda_i \, \phi(\| (x,y)-(x_i,y_i)\|)
-\]
-
-### Ventajas
-- Superficies suaves
-- Excelente para datos dispersos
-
-### Desventajas
-- Mayor costo computacional
-- Sensible a parámetros
-
-### Funciones base más comunes
-- `linear`
-- `cubic`
-- `quintic`
-- `thin_plate_spline`
-- `multiquadric`
-- `gaussian`
-
----
-
-## 5. Kriging Ordinario
-
-### Fundamento
-\[
-Z(u) = \sum_{i=1}^{n} \lambda_i Z(u_i)
-\]
-
-Los pesos se obtienen a partir del **variograma**, minimizando el error de estimación.
-
-### Ventajas
-- Estimaciones óptimas
-- Incluye incertidumbre
-
-### Desventajas
-- Requiere ajuste del variograma
-- Computacionalmente exigente
-
----
-
-## 6. Kriging Universal
-
-Extiende el kriging ordinario incorporando una **tendencia global**:
-
-\[
-Z(u) = \sum \lambda_i Z(u_i) + \sum \mu_j X(u_j)
-\]
-
-### Uso recomendado
-- Cuando existe gradiente espacial
-- Influencia topográfica o climática
-
----
-
-## Modelos de variograma más comunes
-
-- Gaussiano
-- Esférico
-- Exponencial
-- Lineal
-- Potencia
-
-El variograma describe **cómo cambia la similitud con la distancia**.
-
----
-
-## ¿Cómo elegir el método adecuado?
-
-| Situación | Método recomendado |
-|----------|------------------|
-| Pocos datos | IDW |
-| Superficie suave | RBF |
-| Alta precisión | Kriging |
-| Análisis rápido | Lineal / NN |
-| Tendencia espacial | Kriging Universal |
-
----
-
-## Errores comunes en interpolación
-
-⚠️ Extrapolar fuera del dominio  
-⚠️ Usar métodos complejos con pocos datos  
-⚠️ Ignorar la distribución espacial  
-⚠️ No validar resultados
-
----
-
-### Mensaje final
-
-> **No existe un método “mejor” universal**.  
-> El mejor método es el que **mejor representa el fenómeno físico**,  
-> considerando datos, escala y objetivo del análisis.
+- Alta sensibilidad a la distribución espacial
 """)
+
+    # -------------------------------------------------
+    st.markdown("## 3. Inverso de la Distancia Ponderado (IDW)")
+
+    st.markdown("**Fundamento matemático**")
+
+    st.latex(r"""
+    Z(x) =
+    \frac{\sum_{i=1}^{n} \frac{Z(x_i)}{d(x,x_i)^p}}
+    {\sum_{i=1}^{n} \frac{1}{d(x,x_i)^p}}
+    """)
+
+    st.markdown("""
+donde:
+- \\(d(x,x_i)\\) es la distancia
+- \\(p\\) es el parámetro de potencia
+
+**Aplicaciones**
+- Hidrología
+- Meteorología
+- Agricultura
+
+**Ventajas**
+- Fácil de interpretar
+- Controla la influencia espacial
+
+**Desventajas**
+- No capta tendencias globales
+- Puede generar artefactos
+""")
+
+    # -------------------------------------------------
+    st.markdown("## 4. Interpolación mediante Funciones de Base Radial (RBF)")
+
+    st.markdown("**Fundamento matemático**")
+
+    st.latex(r"""
+    f(x,y) = \sum_{i=1}^{n} \lambda_i
+    \phi\left(\| (x,y) - (x_i,y_i) \|\right)
+    """)
+
+    st.markdown("""
+donde:
+- \\(\\lambda_i\\) son coeficientes de ajuste
+- \\(\\phi(r)\\) es la función base radial
+- \\(r\\) es la distancia euclidiana
+
+**Aplicaciones**
+- Modelos digitales de elevación
+- Superficies ambientales continuas
+- Visualización científica
+
+**Ventajas**
+- Produce superficies suaves
+- Maneja datos dispersos
+
+**Desventajas**
+- Mayor costo computacional
+- Sensible a la función base elegida
+""")
+
+    # -------------------------------------------------
+    st.markdown("### Funciones base radiales más comunes")
+
+    st.markdown("""
+| Función | Expresión | Uso recomendado |
+|-------|-----------|----------------|
+| Linear | \\(\\phi(r)=r\\) | Datos simples |
+| Cubic | \\(r^3\\) | Curvas suaves |
+| Quintic | \\(r^5\\) | Alta suavidad |
+| Gaussian | \\(e^{-(\\varepsilon r)^2}\\) | Datos densos |
+| Multiquadric | \\(\\sqrt{1+(\\varepsilon r)^2}\\) | Uso general |
+""")
+
+    # -------------------------------------------------
+    st.markdown("## 5. Kriging Ordinario")
+
+    st.markdown("**Fundamento matemático**")
+
+    st.latex(r"""
+    Z(u) = \sum_{i=1}^{n} \lambda_i Z(u_i)
+    """)
+
+    st.markdown("""
+Este método utiliza un **variograma** para modelar la dependencia espacial
+y calcular pesos óptimos que minimizan el error de estimación.
+
+**Aplicaciones**
+- Geología
+- Minería
+- Hidrología
+
+**Ventajas**
+- Alta precisión
+- Estimación óptima
+
+**Desventajas**
+- Requiere ajuste de variograma
+- Mayor complejidad
+""")
+
+    # -------------------------------------------------
+    st.markdown("## 6. Kriging Universal")
+
+    st.markdown("**Fundamento matemático**")
+
+    st.latex(r"""
+    Z(u) = \sum_{i=1}^{n} \lambda_i Z(u_i)
+    + \sum_{j=1}^{m} \mu_j X_j(u)
+    """)
+
+    st.markdown("""
+Incorpora **tendencias globales** mediante covariables.
+
+**Aplicaciones**
+- Cambio climático
+- Agricultura de precisión
+
+**Ventajas**
+- Captura tendencia + variabilidad local
+
+**Desventajas**
+- Modelo más complejo
+- Requiere mayor información
+""")
+
+    # -------------------------------------------------
+    st.markdown("## Comparación general de métodos")
+
+    st.markdown("""
+| Método | Precisión | Suavidad | Costo computacional |
+|------|-----------|----------|--------------------|
+| Lineal | Baja | Baja | Muy bajo |
+| Vecinos | Baja | Muy baja | Muy bajo |
+| IDW | Media | Media | Bajo |
+| RBF | Alta | Alta | Medio |
+| Kriging | Muy alta | Muy alta | Alto |
+""")
+
+    st.info("""
+**Conclusión:**  
+La elección del método depende de:
+- naturaleza de los datos
+- objetivo del análisis
+- disponibilidad computacional
+""")
+
 
 # ------------------------------------------
 # SESSION STATE (FUENTE ÚNICA DE VERDAD)
