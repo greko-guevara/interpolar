@@ -1,6 +1,5 @@
 # ==========================================
 # INTER-POLAR | Streamlit Edition
-# Migración desde Tkinter
 # Prof. Gregory Guevara
 # ==========================================
 
@@ -25,6 +24,206 @@ st.set_page_config(
 
 st.title("🌍 Inter-Polar – Métodos de Interpolación")
 st.caption("Versión Streamlit | Geoestadística aplicada")
+with st.expander("📘 Ayuda teórica — Interpolación de Datos (Fundamentos y Métodos)", expanded=False):
+    st.markdown(r"""
+# Introducción a la Interpolación de Datos
+**Prof. Gregory Guevara**  
+**Universidad EARTH**  
+_Enero 2026_
+
+La **interpolación de datos** es el proceso mediante el cual se estiman valores desconocidos
+a partir de un conjunto de datos discretos conocidos.  
+Es ampliamente utilizada en:
+
+- Hidrología
+- Meteorología
+- Geofísica
+- Cartografía
+- Ciencias ambientales
+
+El objetivo es construir **superficies continuas** que representen de forma razonable
+el comportamiento espacial de una variable medida en puntos discretos.
+
+---
+
+## ¿Cuándo es apropiado interpolar?
+
+La interpolación es adecuada cuando:
+
+- Existe **continuidad espacial** del fenómeno
+- Los puntos de muestreo representan bien el dominio
+- No se extrapola fuera del rango de los datos
+
+⚠️ **Advertencia**: interpolar no significa “crear información nueva”, sino
+**inferir patrones espaciales existentes**.
+
+---
+
+## 1. Interpolación Lineal
+
+### Fundamento matemático
+Entre dos puntos \((x_1, y_1)\) y \((x_2, y_2)\):
+
+\[
+y = y_1 + \frac{(y_2 - y_1)}{(x_2 - x_1)} (x - x_1)
+\]
+
+### Ventajas
+- Muy rápida
+- Fácil de implementar
+
+### Desventajas
+- No captura comportamiento no lineal
+- Genera quiebres en superficies espaciales
+
+### Uso recomendado
+- Análisis exploratorio
+- Gráficos simples
+- Series 1D
+
+---
+
+## 2. Vecinos Próximos (Nearest Neighbors)
+
+### Fundamento matemático
+\[
+Z(x) = Z(x_i) \quad \text{con} \quad x_i = \arg \min \|x - x_i\|
+\]
+
+### Ventajas
+- Extremadamente rápido
+- No requiere parámetros
+
+### Desventajas
+- Superficies discontinuas
+- Muy sensible a la distribución de puntos
+
+### Uso recomendado
+- Clasificaciones
+- Mapas preliminares
+- Remuestreo de imágenes
+
+---
+
+## 3. Inverso de la Distancia Ponderado (IDW)
+
+### Fundamento matemático
+\[
+Z(x) =
+\frac{\sum_{i=1}^{n} \frac{Z(x_i)}{d(x,x_i)^p}}
+{\sum_{i=1}^{n} \frac{1}{d(x,x_i)^p}}
+\]
+
+Donde:
+- \(p\) controla la influencia de la distancia
+
+### Ventajas
+- Intuitivo
+- Fácil implementación
+
+### Desventajas
+- No modela tendencias globales
+- Puede generar “bullseyes”
+
+---
+
+## 4. Funciones de Base Radial (RBF)
+
+### Modelo general
+\[
+f(x,y) = \sum_{i=1}^{n} \lambda_i \, \phi(\| (x,y)-(x_i,y_i)\|)
+\]
+
+### Ventajas
+- Superficies suaves
+- Excelente para datos dispersos
+
+### Desventajas
+- Mayor costo computacional
+- Sensible a parámetros
+
+### Funciones base más comunes
+- `linear`
+- `cubic`
+- `quintic`
+- `thin_plate_spline`
+- `multiquadric`
+- `gaussian`
+
+---
+
+## 5. Kriging Ordinario
+
+### Fundamento
+\[
+Z(u) = \sum_{i=1}^{n} \lambda_i Z(u_i)
+\]
+
+Los pesos se obtienen a partir del **variograma**, minimizando el error de estimación.
+
+### Ventajas
+- Estimaciones óptimas
+- Incluye incertidumbre
+
+### Desventajas
+- Requiere ajuste del variograma
+- Computacionalmente exigente
+
+---
+
+## 6. Kriging Universal
+
+Extiende el kriging ordinario incorporando una **tendencia global**:
+
+\[
+Z(u) = \sum \lambda_i Z(u_i) + \sum \mu_j X(u_j)
+\]
+
+### Uso recomendado
+- Cuando existe gradiente espacial
+- Influencia topográfica o climática
+
+---
+
+## Modelos de variograma más comunes
+
+- Gaussiano
+- Esférico
+- Exponencial
+- Lineal
+- Potencia
+
+El variograma describe **cómo cambia la similitud con la distancia**.
+
+---
+
+## ¿Cómo elegir el método adecuado?
+
+| Situación | Método recomendado |
+|----------|------------------|
+| Pocos datos | IDW |
+| Superficie suave | RBF |
+| Alta precisión | Kriging |
+| Análisis rápido | Lineal / NN |
+| Tendencia espacial | Kriging Universal |
+
+---
+
+## Errores comunes en interpolación
+
+⚠️ Extrapolar fuera del dominio  
+⚠️ Usar métodos complejos con pocos datos  
+⚠️ Ignorar la distribución espacial  
+⚠️ No validar resultados
+
+---
+
+### Mensaje final
+
+> **No existe un método “mejor” universal**.  
+> El mejor método es el que **mejor representa el fenómeno físico**,  
+> considerando datos, escala y objetivo del análisis.
+""")
 
 # ------------------------------------------
 # SESSION STATE (FUENTE ÚNICA DE VERDAD)
@@ -44,7 +243,8 @@ if "modo_variograma" not in st.session_state:
 st.sidebar.header("1️⃣ Archivo de datos")
 
 uploaded_file = st.sidebar.file_uploader(
-    "Cargar archivo CSV o Excel",
+    "Cargar archivo CSV o Excel, " \
+    "**Columnas requeridas = {x,y,z,punto}**",
     type=["csv", "xls", "xlsx"]
 )
 
@@ -258,26 +458,3 @@ if df is not None and st.button("▶ Ejecutar interpolación"):
     ax.grid(alpha=0.3)
     st.pyplot(fig)
 
-
-
-if modo_docente and metodo == "Linear":
-    with st.expander("📘 Interpolación Lineal – Fundamentos"):
-        st.markdown("""
-### Interpolación Lineal
-
-La interpolación lineal estima valores desconocidos asumiendo un cambio lineal entre puntos vecinos.
-
-**Fundamento matemático:**
-
-\\[
-y = y_1 + \\frac{(y_2 - y_1)}{(x_2 - x_1)} (x - x_1)
-\\]
-
-**Ventajas**
-- Muy rápida
-- Fácil de interpretar
-
-**Limitaciones**
-- No captura variabilidad no lineal
-- Puede generar superficies angulosas
-""")
