@@ -450,3 +450,161 @@ if df is not None and st.button("▶ Ejecutar interpolación"):
     ax.grid(alpha=0.3)
     st.pyplot(fig)
 
+# ------------------------------------------
+# ------------------------------------------
+# ------------------------------------------
+# Reporte Final 
+# ------------------------------------------
+# ------------------------------------------
+# ------------------------------------------
+
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
+)
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+import tempfile
+import os
+
+def generar_onepage_report(
+    df,
+    metodo,
+    usa_variograma,
+    modelo_variograma,
+    fig_interp
+):
+    # ===============================
+    # Archivo PDF
+    # ===============================
+    pdf_name = "InterPolar_OnePage_Report.pdf"
+
+    doc = SimpleDocTemplate(
+        pdf_name,
+        pagesize=A4,
+        rightMargin=36,
+        leftMargin=36,
+        topMargin=36,
+        bottomMargin=36
+    )
+
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(
+        name="CenterTitle",
+        alignment=1,
+        fontSize=16,
+        spaceAfter=12
+    ))
+
+    story = []
+
+    # ===============================
+    # TÍTULO
+    # ===============================
+    story.append(Paragraph(
+        "Inter-Polar — One-Page Technical Report",
+        styles["CenterTitle"]
+    ))
+
+    story.append(Paragraph(
+        "<b>Interpolación espacial y diagnóstico geoestadístico</b>",
+        styles["Normal"]
+    ))
+
+    story.append(Spacer(1, 12))
+
+    # ===============================
+    # ESTADÍSTICAS
+    # ===============================
+    z = df["z"]
+
+    stats_data = [
+        ["Estadístico", "Valor"],
+        ["Número de puntos", f"{len(z)}"],
+        ["Mínimo", f"{z.min():.3f}"],
+        ["Máximo", f"{z.max():.3f}"],
+        ["Media", f"{z.mean():.3f}"],
+        ["Mediana", f"{z.median():.3f}"],
+        ["Desv. estándar", f"{z.std():.3f}"],
+        ["Asimetría", f"{skew(z):.3f}"],
+        ["Curtosis", f"{kurtosis(z):.3f}"],
+    ]
+
+    table = Table(stats_data, colWidths=[140, 100])
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+    ]))
+
+    story.append(Paragraph("<b>1. Estadísticas descriptivas</b>", styles["Heading2"]))
+    story.append(table)
+    story.append(Spacer(1, 12))
+
+    # ===============================
+    # DIAGNÓSTICO
+    # ===============================
+    texto_diag = f"""
+    <b>Método de interpolación:</b> {metodo}<br/>
+    <b>Uso de variograma:</b> {"Sí" if usa_variograma else "No"}<br/>
+    """
+
+    if usa_variograma and modelo_variograma:
+        texto_diag += f"<b>Modelo de variograma:</b> {modelo_variograma.capitalize()}<br/>"
+
+    story.append(Paragraph("<b>2. Diagnóstico geoestadístico</b>", styles["Heading2"]))
+    story.append(Paragraph(texto_diag, styles["Normal"]))
+    story.append(Spacer(1, 10))
+
+    # ===============================
+    # FIGURA DE INTERPOLACIÓN
+    # ===============================
+    with tempfile.TemporaryDirectory() as tmpdir:
+        img_path = os.path.join(tmpdir, "interpolacion.png")
+        fig_interp.savefig(img_path, dpi=150, bbox_inches="tight")
+
+        story.append(Paragraph("<b>3. Superficie interpolada</b>", styles["Heading2"]))
+        story.append(Image(img_path, width=420, height=280))
+
+    story.append(Spacer(1, 8))
+
+    # ===============================
+    # NOTA TÉCNICA FINAL
+    # ===============================
+    story.append(Paragraph(
+        "<i>Este reporte fue generado automáticamente por Inter-Polar "
+        "para análisis exploratorio y docencia en interpolación espacial.</i>",
+        styles["Normal"]
+    ))
+
+    # ===============================
+    # CONSTRUIR PDF
+    # ===============================
+    doc.build(story)
+
+    # ===============================
+    # DESCARGA
+    # ===============================
+    with open(pdf_name, "rb") as f:
+        st.success("Reporte PDF generado correctamente")
+        st.download_button(
+            label="⬇️ Descargar One-Page Report",
+            data=f,
+            file_name=pdf_name,
+            mime="application/pdf"
+        )
+
+
+
+st.markdown("---")
+st.subheader("📄 Reporte técnico")
+
+if st.button("📄 Generar One-Page Report (PDF)"):
+    generar_onepage_report(
+        df=df,
+        metodo=metodo,
+        usa_variograma=(metodo == "Kriging"),
+        modelo_variograma=st.session_state.modelo_variograma,
+        fig_interp=fig
+    )
