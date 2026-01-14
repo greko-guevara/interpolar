@@ -381,8 +381,6 @@ metodo = st.sidebar.selectbox(
     ["Nearest", "Linear", "IDW", "RBF", "Kriging"]
 )
 
-st.sidebar.markdown("---")
-modo_docente = st.sidebar.toggle("🎓 Modo docente (explicaciones)")
 
 if metodo == "RBF":
     rbf_func = st.sidebar.selectbox(
