@@ -451,11 +451,7 @@ if df is not None and st.button("▶ Ejecutar interpolación"):
     st.pyplot(fig)
 
 # ------------------------------------------
-# ------------------------------------------
-# ------------------------------------------
-# Reporte Final 
-# ------------------------------------------
-# ------------------------------------------
+# REPORTE FINAL – ONE PAGE PDF (CLOUD SAFE)
 # ------------------------------------------
 
 from reportlab.platypus import (
@@ -464,8 +460,9 @@ from reportlab.platypus import (
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
-import tempfile
-import os
+from scipy.stats import skew, kurtosis
+from io import BytesIO
+
 
 def generar_onepage_report(
     df,
@@ -475,12 +472,12 @@ def generar_onepage_report(
     fig_interp
 ):
     # ===============================
-    # Archivo PDF
+    # BUFFER PDF EN MEMORIA
     # ===============================
-    pdf_name = "InterPolar_OnePage_Report.pdf"
+    pdf_buffer = BytesIO()
 
     doc = SimpleDocTemplate(
-        pdf_name,
+        pdf_buffer,
         pagesize=A4,
         rightMargin=36,
         leftMargin=36,
@@ -493,7 +490,8 @@ def generar_onepage_report(
         name="CenterTitle",
         alignment=1,
         fontSize=16,
-        spaceAfter=12
+        spaceAfter=14,
+        leading=18
     ))
 
     story = []
@@ -511,10 +509,10 @@ def generar_onepage_report(
         styles["Normal"]
     ))
 
-    story.append(Spacer(1, 12))
+    story.append(Spacer(1, 14))
 
     # ===============================
-    # ESTADÍSTICAS
+    # ESTADÍSTICAS DESCRIPTIVAS
     # ===============================
     z = df["z"]
 
@@ -530,20 +528,22 @@ def generar_onepage_report(
         ["Curtosis", f"{kurtosis(z):.3f}"],
     ]
 
-    table = Table(stats_data, colWidths=[140, 100])
+    table = Table(stats_data, colWidths=[180, 120])
     table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#EAEAEA")),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-        ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+        ("TOPPADDING", (0, 0), (-1, 0), 8),
     ]))
 
     story.append(Paragraph("<b>1. Estadísticas descriptivas</b>", styles["Heading2"]))
     story.append(table)
-    story.append(Spacer(1, 12))
+    story.append(Spacer(1, 14))
 
     # ===============================
-    # DIAGNÓSTICO
+    # DIAGNÓSTICO GEOESTADÍSTICO
     # ===============================
     texto_diag = f"""
     <b>Método de interpolación:</b> {metodo}<br/>
@@ -555,26 +555,30 @@ def generar_onepage_report(
 
     story.append(Paragraph("<b>2. Diagnóstico geoestadístico</b>", styles["Heading2"]))
     story.append(Paragraph(texto_diag, styles["Normal"]))
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 14))
 
     # ===============================
-    # FIGURA DE INTERPOLACIÓN
+    # FIGURA DE INTERPOLACIÓN (BytesIO)
     # ===============================
-    with tempfile.TemporaryDirectory() as tmpdir:
-        img_path = os.path.join(tmpdir, "interpolacion.png")
-        fig_interp.savefig(img_path, dpi=150, bbox_inches="tight")
+    img_buffer = BytesIO()
+    fig_interp.savefig(
+        img_buffer,
+        format="png",
+        dpi=150,
+        bbox_inches="tight"
+    )
+    img_buffer.seek(0)
 
-        story.append(Paragraph("<b>3. Superficie interpolada</b>", styles["Heading2"]))
-        story.append(Image(img_path, width=420, height=280))
-
-    story.append(Spacer(1, 8))
+    story.append(Paragraph("<b>3. Superficie interpolada</b>", styles["Heading2"]))
+    story.append(Image(img_buffer, width=420, height=280))
+    story.append(Spacer(1, 12))
 
     # ===============================
-    # NOTA TÉCNICA FINAL
+    # NOTA FINAL
     # ===============================
     story.append(Paragraph(
-        "<i>Este reporte fue generado automáticamente por Inter-Polar "
-        "para análisis exploratorio y docencia en interpolación espacial.</i>",
+        "<i>Reporte generado automáticamente por Inter-Polar. "
+        "Uso académico, exploratorio y docente.</i>",
         styles["Normal"]
     ))
 
@@ -583,28 +587,30 @@ def generar_onepage_report(
     # ===============================
     doc.build(story)
 
-    # ===============================
-    # DESCARGA
-    # ===============================
-    with open(pdf_name, "rb") as f:
-        st.success("Reporte PDF generado correctamente")
-        st.download_button(
-            label="⬇️ Descargar One-Page Report",
-            data=f,
-            file_name=pdf_name,
-            mime="application/pdf"
-        )
+    pdf_buffer.seek(0)
+    return pdf_buffer
 
 
-
+# ------------------------------------------
+# BOTÓN STREAMLIT
+# ------------------------------------------
 st.markdown("---")
 st.subheader("📄 Reporte técnico")
 
 if st.button("📄 Generar One-Page Report (PDF)"):
-    generar_onepage_report(
+    pdf_bytes = generar_onepage_report(
         df=df,
         metodo=metodo,
         usa_variograma=(metodo == "Kriging"),
         modelo_variograma=st.session_state.modelo_variograma,
         fig_interp=fig
+    )
+
+    st.success("Reporte generado correctamente")
+
+    st.download_button(
+        label="⬇️ Descargar One-Page Report",
+        data=pdf_bytes,
+        file_name="InterPolar_OnePage_Report.pdf",
+        mime="application/pdf"
     )
