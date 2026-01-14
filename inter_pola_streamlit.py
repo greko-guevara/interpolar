@@ -49,7 +49,7 @@ a partir de observaciones puntuales.
     st.markdown("## 1. Interpolación Lineal")
 
     st.markdown("**Fundamento matemático**")
-    st.markdown("Entre dos puntos conocidos \\((x_1, y_1)\\) y \\((x_2, y_2)\\):")
+    st.markdown("Entre dos puntos conocidos $\\((x_1, y_1)\\) y \\((x_2, y_2)\\)$:")
 
     st.latex(r"""
     y = y_1 + \frac{(y_2 - y_1)}{(x_2 - x_1)} (x - x_1)
@@ -107,8 +107,8 @@ a partir de observaciones puntuales.
 
     st.markdown("""
 donde:
-- \\(d(x,x_i)\\) es la distancia
-- \\(p\\) es el parámetro de potencia
+- $\\(d(x,x_i)\\)$ es la distancia
+- $\\(p\\)$ es el parámetro de potencia
 
 **Aplicaciones**
 - Hidrología
